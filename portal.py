@@ -30,9 +30,37 @@ DEFAULT_QUERY_DATA = {
     'name':'traffic_data.csv'
 }
 
+DEFAULT_OPTIONS = {
+    'api':'highways',
+    'unknown':'simplerange',
+    'id':'1',
+    'start':'01-16-2016',
+    'stop':'01-16-2016',
+    'starttime':'00:00',
+    'endtime':'23:59',
+    'corridor':'1',
+    'qty1':'speed',
+    'qty2':'volume',
+    'res':'1hr',
+    'group':'no',
+    'days':'0-1-2-3-4-5-6',
+    'format':'csv',
+    'name':'traffic_data.csv'
+}
+
 QTY1_OPTIONS = {
     'speed': 'speed',
     'volume': 'volume'
+}
+
+DATA_TYPE_RELATIONS = {
+    "vol": int,
+    "occ": float,
+    "speed": float,
+    "vmt": int,
+    "delay": float,
+    "vht": float,
+    "traveltime": float
 }
 
 TEST_URL = 'http://portal.its.pdx.edu/Portal//index.php/api/stations/chibutton/id/1630/start/01-17-2016/stop/01-17-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/station_1630_01-17-2016_data.csv'
@@ -58,6 +86,19 @@ def csv_url_to_2d_array(urlAsString):
     response = urllib2.urlopen(urlAsString)
     reader = csv.reader(response)
     return list(reader)
+
+def csv_url_to_2d_array2(urlAsString):
+    TYPES = ['vol']
+
+    '''
+    :param url:
+    :return:
+    '''
+
+    response = urllib2.urlopen(urlAsString)
+    reader = csv.reader(response)
+
+    tmpArr = list(reader)
 
 def save_as_csv(dataArr,outputFileName):
     '''
@@ -110,6 +151,95 @@ def save_as_excel(dataArr,filename='portal_data.xlsx'):
 def build_url():
     pass
 
+# ASSIGNMENT FUNCTIONS
+
+def calc_vmt(arr2d):
+
+    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
+    volColIndex = []
+    for colNum in range(0,len(arr2d[0])):
+        if '_vol' in arr2d[0][colNum]:
+            volColIndex.append(colNum)
+
+    # CREATE
+    vmtArr = []
+    for colIndex in volColIndex:
+        currentColArr = [arr2d[i][colIndex] for i in range(0, len(arr2d))]
+
+def get_data_by_param(arr2d, paramType="vol", customDataType=str):
+
+    DATA_TYPE = {
+        "vol": int,
+        "occ": float,
+        "speed": float,
+        "other": customDataType
+    }
+
+    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
+    volColIndex = []
+    for colNum in range(0,len(arr2d[0])):
+        if paramType in arr2d[0][colNum]:
+            volColIndex.append(colNum)
+
+    # GET DATA FROM ARR
+    paramArr = []
+    for colIndex in volColIndex:
+        header = [arr2d[0][colIndex]]
+        data = [DATA_TYPE[paramType](arr2d[i][colIndex]) for i in range(1, len(arr2d))]
+        paramArr.append(header+data)
+
+    return paramArr
+
+def get_data_by_lane(arr2d, lane=1, customDataType=str):
+
+    DATA_TYPE = {
+        "vol": int,
+        "occ": float,
+        "speed": float,
+        "other": customDataType
+    }
+
+    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
+    volColIndex = []
+    for colNum in range(0,len(arr2d[0])):
+        if paramType in arr2d[0][colNum]:
+            volColIndex.append(colNum)
+
+    # GET DATA FROM ARR
+    paramArr = []
+    for colIndex in volColIndex:
+        header = [arr2d[0][colIndex]]
+        data = [DATA_TYPE[paramType](arr2d[i][colIndex]) for i in range(1, len(arr2d))]
+        paramArr.append(header+data)
+
+    return paramArr
+
+STATION_ATTRS = {
+    "stationid": int,
+    "agencyid": int,
+    "highwayid": int,
+    "highwayname": str,
+    "milepost": float,
+    "description": str,
+    "upstream": int,
+    "downstream": int,
+    "oppositestation": int,
+    "lon": float,
+    "lat": float
+}
+
+def get_station_data():
+    arr = csv_url_to_2d_array("http://portal.its.pdx.edu/Portal/index.php/api/downloads/get_stations/")
+
+    stations_by_id = {}
+    for i in range(1, len(arr)):
+        station_info = {}
+        for j in range(0, len(arr[i])):
+
+        stations_by_id[int(arr[i][0])] = {"agencyid": int(arr[i][1]),
+                                          "highwayid": int(arr[i][1]),
+                                          }
+
 # SCRIPT MAIN
 
 def main():
@@ -117,6 +247,9 @@ def main():
     arr = csv_url_to_2d_array(TEST_URL)
     save_as_excel(arr)
     print arr
+
+    arrCol = get_data_by_param(arr)
+    print arrCol
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
