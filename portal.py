@@ -232,24 +232,32 @@ def get_station_data():
     arr = csv_url_to_2d_array("http://portal.its.pdx.edu/Portal/index.php/api/downloads/get_stations/")
 
     stations_by_id = {}
+    headers = arr[0][:]
     for i in range(1, len(arr)):
         station_info = {}
-        for j in range(0, len(arr[i])):
+        j = 0
+        for head in headers:
+            try:
+                station_info[head] = STATION_ATTRS[head](arr[i][j])
+            except:
+                station_info[head] = None
+            j += 1
 
-        stations_by_id[int(arr[i][0])] = {"agencyid": int(arr[i][1]),
-                                          "highwayid": int(arr[i][1]),
-                                          }
+        stations_by_id[int(arr[i][0])] = station_info
+
+    return stations_by_id
 
 # SCRIPT MAIN
 
 def main():
     # define the variable 'current_time' as a tuple of time.localtime()
-    arr = csv_url_to_2d_array(TEST_URL)
+    '''arr = csv_url_to_2d_array(TEST_URL)
     save_as_excel(arr)
     print arr
 
     arrCol = get_data_by_param(arr)
-    print arrCol
+    print arrCol'''
+    print get_station_data()
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
