@@ -3,12 +3,23 @@ __author__ = 'Troy'
 import csv
 import urllib2
 import openpyxl, pprint
+import dateutil.parser
 
 def get_portal_data():
     url = 'http://portal.its.pdx.edu/Portal//index.php/api/highways/simplerange/id/1/start/01-16-2016/stop/01-16-2016/starttime/00:00/endtime/23:59/corridor/1/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/format/csv/name/traffic_data.csv'
     response = urllib2.urlopen(url)
     cr = csv.reader(response)
 
+    for row in cr:
+        print row
+
+def get_portal_data2():
+    url = 'http://portal.its.pdx.edu/Portal//index.php/api/highways/simplerange/id/1/start/01-16-2016/stop/01-16-2016/starttime/00:00/endtime/23:59/corridor/1/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/format/csv/name/traffic_data.csv'
+    response = urllib2.urlopen(url)
+    cr = csv.reader(response)
+    #print cr
+    header = cr.next()
+    print header
     for row in cr:
         print row
 
@@ -60,8 +71,11 @@ DATA_TYPE_RELATIONS = {
     "vmt": int,
     "delay": float,
     "vht": float,
-    "traveltime": float
+    "traveltime": float,
+    "starttime": dateutil.parser.parse
 }
+
+DATA_TYPES = ["vol", "occ", "speed", "vmt", "delay", "vht", "traveltime", "starttime"]
 
 TEST_URL = 'http://portal.its.pdx.edu/Portal//index.php/api/stations/chibutton/id/1630/start/01-17-2016/stop/01-17-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/station_1630_01-17-2016_data.csv'
 
@@ -88,8 +102,6 @@ def csv_url_to_2d_array(urlAsString):
     return list(reader)
 
 def csv_url_to_2d_array2(urlAsString):
-    TYPES = ['vol']
-
     '''
     :param url:
     :return:
@@ -99,6 +111,18 @@ def csv_url_to_2d_array2(urlAsString):
     reader = csv.reader(response)
 
     tmpArr = list(reader)
+
+    headerArr = tmpArr[0]
+
+    data_types = []
+    for head in headerArr:
+        for type in DATA_TYPES:
+            if type in head:
+                data_types.append(type)
+                break
+
+
+
 
 def save_as_csv(dataArr,outputFileName):
     '''
@@ -251,13 +275,15 @@ def get_station_data():
 
 def main():
     # define the variable 'current_time' as a tuple of time.localtime()
-    '''arr = csv_url_to_2d_array(TEST_URL)
-    save_as_excel(arr)
+    arr = csv_url_to_2d_array(TEST_URL)
+    #save_as_excel(arr)
     print arr
 
+    get_portal_data2()
+
     arrCol = get_data_by_param(arr)
-    print arrCol'''
-    print get_station_data()
+    print arrCol
+    #print get_station_data()
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
