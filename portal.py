@@ -68,6 +68,7 @@ DATA_TYPE_RELATIONS = {
     "vol": int,
     "occ": float,
     "speed": float,
+    "spd": float,
     "vmt": int,
     "delay": float,
     "vht": float,
@@ -75,9 +76,9 @@ DATA_TYPE_RELATIONS = {
     "starttime": dateutil.parser.parse
 }
 
-DATA_TYPES = ["vol", "occ", "speed", "vmt", "delay", "vht", "traveltime", "starttime"]
+DATA_TYPES = ["vol", "occ", "speed", "spd", "vmt", "delay", "vht", "traveltime", "starttime"]
 
-TEST_URL = 'http://portal.its.pdx.edu/Portal//index.php/api/stations/chibutton/id/1630/start/01-17-2016/stop/01-17-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/station_1630_01-17-2016_data.csv'
+TEST_URL = 'http://portal.its.pdx.edu/api/stations/twoquantityungroupedsimplerange/id/3170/start/02-04-2016/stop/02-04-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/traffic_data.csv'
 
 class PortalDataSet():
 
@@ -101,28 +102,43 @@ def csv_url_to_2d_array(urlAsString):
     reader = csv.reader(response)
     return list(reader)
 
-def csv_url_to_2d_array2(urlAsString):
+def csv_url_to_2d_array2(urlAsString, withHeader=True):
     '''
     :param url:
     :return:
     '''
 
+    # GET DATA AS 2D LIST
     response = urllib2.urlopen(urlAsString)
     reader = csv.reader(response)
-
     tmpArr = list(reader)
 
+    # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
     headerArr = tmpArr[0]
 
     data_types = []
     for head in headerArr:
-        for type in DATA_TYPES:
-            if type in head:
-                data_types.append(type)
+        for dtype in DATA_TYPES:
+            if dtype in head:
+                data_types.append(dtype)
                 break
 
+    # APPLY DATA TYPES AND CREATE CORRECT TYPES
+    arr_with_correct_types = []
+    for row in tmpArr[1:]:
+        rowArr = []
+        for i in range(0,len(row)):
+            try:
+                result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+            except:
+                result = None
+            rowArr.append(result)
+        arr_with_correct_types.append(rowArr)
 
+    if withHeader:
+        arr_with_correct_types = [headerArr] + arr_with_correct_types
 
+    return arr_with_correct_types
 
 def save_as_csv(dataArr,outputFileName):
     '''
@@ -190,18 +206,12 @@ def calc_vmt(arr2d):
     for colIndex in volColIndex:
         currentColArr = [arr2d[i][colIndex] for i in range(0, len(arr2d))]
 
-def get_data_by_param(arr2d, paramType="vol", customDataType=str):
-
-    DATA_TYPE = {
-        "vol": int,
-        "occ": float,
-        "speed": float,
-        "other": customDataType
-    }
+def get_data_by_param(arr2d, paramType="vol"):
 
     # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
     volColIndex = []
     for colNum in range(0,len(arr2d[0])):
+        print colNum, arr2d[0][colNum]
         if paramType in arr2d[0][colNum]:
             volColIndex.append(colNum)
 
@@ -209,19 +219,12 @@ def get_data_by_param(arr2d, paramType="vol", customDataType=str):
     paramArr = []
     for colIndex in volColIndex:
         header = [arr2d[0][colIndex]]
-        data = [DATA_TYPE[paramType](arr2d[i][colIndex]) for i in range(1, len(arr2d))]
+        data = [arr2d[i][colIndex] for i in range(1, len(arr2d))]
         paramArr.append(header+data)
 
     return paramArr
 
 def get_data_by_lane(arr2d, lane=1, customDataType=str):
-
-    DATA_TYPE = {
-        "vol": int,
-        "occ": float,
-        "speed": float,
-        "other": customDataType
-    }
 
     # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
     volColIndex = []
@@ -275,11 +278,11 @@ def get_station_data():
 
 def main():
     # define the variable 'current_time' as a tuple of time.localtime()
-    arr = csv_url_to_2d_array(TEST_URL)
+    arr = csv_url_to_2d_array2(TEST_URL)
     #save_as_excel(arr)
     print arr
 
-    get_portal_data2()
+    #get_portal_data2()
 
     arrCol = get_data_by_param(arr)
     print arrCol
