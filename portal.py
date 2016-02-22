@@ -1,5 +1,20 @@
 __author__ = 'Troy'
 
+'''
+CAN CURRENTLY
+    - SAVE AS: csv, excel
+    - GET DATA BY:
+        - Lane
+        - Parameters
+
+    - Obtain csv data from specified url
+    - Can save data
+
+DEFINITIONS
+- Primary functions:
+- Secondary functions: Functions which build upon primary functions for more useful or specific data applications
+'''
+
 import csv
 import urllib2
 import openpyxl, pprint
@@ -92,17 +107,9 @@ class StationData:
 
 # WORKING FUNCTIONS
 
-def csv_url_to_2d_array(urlAsString):
-    '''
-    :param url:
-    :return:
-    '''
+# PRIMARY FUNCTIONS
 
-    response = urllib2.urlopen(urlAsString)
-    reader = csv.reader(response)
-    return list(reader)
-
-def csv_url_to_2d_array2(urlAsString, withHeader=True):
+def csv_url_to_2d_array(urlAsString, withHeader=True):
     '''
     :param url:
     :return:
@@ -115,7 +122,43 @@ def csv_url_to_2d_array2(urlAsString, withHeader=True):
 
     # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
     headerArr = tmpArr[0]
+    data_types = []
+    for head in headerArr:
+        for dtype in DATA_TYPES:
+            if dtype in head:
+                data_types.append(dtype)
+                break
 
+    # APPLY DATA TYPES AND CREATE CORRECT TYPES
+    arr_with_correct_types = []
+    for row in tmpArr[1:]:
+        rowArr = []
+        for i in range(0,len(row)):
+            try:
+                result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+            except:
+                result = None
+            rowArr.append(result)
+        arr_with_correct_types.append(rowArr)
+
+    if withHeader:
+        arr_with_correct_types = [headerArr] + arr_with_correct_types
+
+    return arr_with_correct_types
+
+def get_all_info(urlAsString, withHeader=True):
+    '''
+    :param url:
+    :return:
+    '''
+
+    # GET DATA AS 2D LIST
+    response = urllib2.urlopen(urlAsString)
+    reader = csv.reader(response)
+    tmpArr = list(reader)
+
+    # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
+    headerArr = tmpArr[0]
     data_types = []
     for head in headerArr:
         for dtype in DATA_TYPES:
@@ -151,6 +194,49 @@ def save_as_csv(dataArr,outputFileName):
         writer = csv.writer(f)
         writer.writerows(dataArr)
 
+def save_as_excel(dataArr,filename='portal_data.xlsx'):
+    '''
+    :param dataArr:
+    :param filename:
+    :return:
+    '''
+    print('Opening workbook...')
+    wb = openpyxl.Workbook()
+    sheet = wb.get_active_sheet()
+
+    for rowNum in range(0, len(dataArr)):
+        for colNum in range(0, len(dataArr[0])):
+            colLet = openpyxl.cell.get_column_letter(colNum+1)
+            sheet[colLet + str(rowNum+1)].value = dataArr[rowNum][colNum]
+
+    wb.save(filename)
+
+def filter_data_by(arr2d, filterType):
+    '''
+    Filters data using the headers to find
+    :param arr2d:
+    :param paramType:
+    :return: array of
+    '''
+
+    # FIND INDEX FOR SELECTED PARAMETER COLUMNS FOR DATA SET
+    filterColIndex = []
+    for colNum in range(0,len(arr2d[0])):
+        print colNum, arr2d[0][colNum]
+        if filterType in arr2d[0][colNum]:
+            filterColIndex.append(colNum)
+
+    # GET DATA FROM ARR
+    paramArr = []
+    for colIndex in filterColIndex:
+        header = [arr2d[0][colIndex]]
+        data = [arr2d[i][colIndex] for i in range(1, len(arr2d))]
+        paramArr.append(header+data)
+
+    return paramArr
+
+# SECONDARY FUNCTIONS
+
 def build_dict_from_url(urlAsStr):
 
     # STRIP URL OF BASIC INFORMATION
@@ -169,22 +255,18 @@ def build_dict_from_url(urlAsStr):
 
     return urlDict
 
-def save_as_excel(dataArr,filename='portal_data.xlsx'):
+def get_data_by_param(arr2d, paramType="vol"):
     '''
-    :param dataArr:
-    :param filename:
-    :return:
+    Filters data using the headers to find
+    :param arr2d:
+    :param paramType:
+    :return: array of
     '''
-    print('Opening workbook...')
-    wb = openpyxl.Workbook()
-    sheet = wb.get_active_sheet()
 
-    for rowNum in range(0, len(dataArr)):
-        for colNum in range(0, len(dataArr[0])):
-            colLet = openpyxl.cell.get_column_letter(colNum+1)
-            sheet[colLet + str(rowNum+1)].value = dataArr[rowNum][colNum]
+    return filter_data_by(arr2d, paramType)
 
-    wb.save(filename)
+def get_data_by_lane(arr2d, lane=1):
+    return filter_data_by(arr2d, str(lane))
 
 # DEVELOPING FUNCTIONS
 
@@ -193,53 +275,17 @@ def build_url():
 
 # ASSIGNMENT FUNCTIONS
 
-def calc_vmt(arr2d):
+def vmt(segment_vol, influence_area):
+    return segment_vol * influence_area
 
-    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
-    volColIndex = []
-    for colNum in range(0,len(arr2d[0])):
-        if '_vol' in arr2d[0][colNum]:
-            volColIndex.append(colNum)
+def vht(segment_vol, influence_area, segment_ave_speed):
+    return segment_vol * influence_area / segment_ave_speed
 
-    # CREATE
-    vmtArr = []
-    for colIndex in volColIndex:
-        currentColArr = [arr2d[i][colIndex] for i in range(0, len(arr2d))]
+def pmt(segment_vol, influence_area, persons):
+    return vmt(segment_vol, influence_area) * persons
 
-def get_data_by_param(arr2d, paramType="vol"):
-
-    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
-    volColIndex = []
-    for colNum in range(0,len(arr2d[0])):
-        print colNum, arr2d[0][colNum]
-        if paramType in arr2d[0][colNum]:
-            volColIndex.append(colNum)
-
-    # GET DATA FROM ARR
-    paramArr = []
-    for colIndex in volColIndex:
-        header = [arr2d[0][colIndex]]
-        data = [arr2d[i][colIndex] for i in range(1, len(arr2d))]
-        paramArr.append(header+data)
-
-    return paramArr
-
-def get_data_by_lane(arr2d, lane=1, customDataType=str):
-
-    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
-    volColIndex = []
-    for colNum in range(0,len(arr2d[0])):
-        if paramType in arr2d[0][colNum]:
-            volColIndex.append(colNum)
-
-    # GET DATA FROM ARR
-    paramArr = []
-    for colIndex in volColIndex:
-        header = [arr2d[0][colIndex]]
-        data = [DATA_TYPE[paramType](arr2d[i][colIndex]) for i in range(1, len(arr2d))]
-        paramArr.append(header+data)
-
-    return paramArr
+def pht(segment_vol, influence_area, segment_ave_speed, persons):
+    return vht(segment_vol, influence_area, segment_ave_speed) * persons
 
 STATION_ATTRS = {
     "stationid": int,
@@ -290,3 +336,28 @@ def main():
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
+
+# OLD FUNCTIONS
+
+def csv_url_to_2d_array_old(urlAsString):
+    '''
+    #:param url:
+    #:return:
+    '''
+
+    response = urllib2.urlopen(urlAsString)
+    reader = csv.reader(response)
+    return list(reader)
+
+def calc_vmt2(arr2d):
+
+    for colIndex in volColIndex:
+    # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
+    volColIndex = []
+    for colNum in range(0,len(arr2d[0])):
+        if '_vol' in arr2d[0][colNum]:
+            volColIndex.append(colNum)
+
+    # CREATE
+    vmtArr = []
+    currentColArr = [arr2d[i][colIndex] for i in range(0, len(arr2d))]
