@@ -92,6 +92,7 @@ DATA_TYPE_RELATIONS = {
 }
 
 DATA_TYPES = ["vol", "occ", "speed", "spd", "vmt", "delay", "vht", "traveltime", "starttime"]
+URL_DATA_TYPES = ["vol", "occ", "spd", "vmt", "delay", "vht", "traveltime", "starttime"]
 
 TEST_URL = 'http://portal.its.pdx.edu/api/stations/twoquantityungroupedsimplerange/id/3170/start/02-04-2016/stop/02-04-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/traffic_data.csv'
 
@@ -237,7 +238,7 @@ def filter_data_by(arr2d, filterType):
 
 # SECONDARY FUNCTIONS
 
-def build_dict_from_url(urlAsStr):
+def build_param_dict_from_url(urlAsStr):
 
     # STRIP URL OF BASIC INFORMATION
     urlInfo = urlAsStr.partition(".php/")
@@ -268,10 +269,59 @@ def get_data_by_param(arr2d, paramType="vol"):
 def get_data_by_lane(arr2d, lane=1):
     return filter_data_by(arr2d, str(lane))
 
+def get_all_data(urlAsString, withHeader=True):
+    '''
+    :param url:
+    :return:
+    '''
+
+    url_param_dict = build_param_dict_from_url(urlAsString)
+
+    # GET DATA AS 2D LIST
+    response = urllib2.urlopen(urlAsString)
+    reader = csv.reader(response)
+    tmpArr = list(reader)
+
+    # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
+    headerArr = tmpArr[0]
+    data_types = []
+    for head in headerArr:
+        for dtype in DATA_TYPES:
+            if dtype in head:
+                data_types.append(dtype)
+                break
+
+    # APPLY DATA TYPES AND CREATE CORRECT TYPES
+    arr_with_correct_types = []
+    for row in tmpArr[1:]:
+        rowArr = []
+        for i in range(0,len(row)):
+            try:
+                result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+            except:
+                result = None
+            rowArr.append(result)
+        arr_with_correct_types.append(rowArr)
+
+    if withHeader:
+        arr_with_correct_types = [headerArr] + arr_with_correct_types
+
+    return arr_with_correct_types
+
 # DEVELOPING FUNCTIONS
 
-def build_url():
-    pass
+URL_ORDER = ['id','start','stop','starttime','endtime','corridor','qty1','qty2','res','group','days','lane','format','name']
+
+def build_url(url_param_dict):
+    base_url = 'http://portal.its.pdx.edu/api/stations/twoquantityungroupedsimplerange/'
+    end_url = ''
+
+    for category in URL_ORDER[:-2:]:
+        end_url += str(url_param_dict[category])
+        if category is not "name":
+            end_url += "/"
+
+    print end_url
 
 # ASSIGNMENT FUNCTIONS
 
@@ -324,7 +374,7 @@ def get_station_data():
 
 def main():
     # define the variable 'current_time' as a tuple of time.localtime()
-    arr = csv_url_to_2d_array2(TEST_URL)
+    arr = csv_url_to_2d_array(TEST_URL)
     #save_as_excel(arr)
     print arr
 
@@ -333,6 +383,9 @@ def main():
     arrCol = get_data_by_param(arr)
     print arrCol
     #print get_station_data()
+    url_param_dict = build_param_dict_from_url(TEST_URL)
+    print 'url_param_dict',url_param_dict
+    build_url(url_param_dict)
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
@@ -351,7 +404,7 @@ def csv_url_to_2d_array_old(urlAsString):
 
 def calc_vmt2(arr2d):
 
-    for colIndex in volColIndex:
+    #for colIndex in volColIndex:
     # FIND INDEX FOR VOLUME COLUMNS FOR DATA SET
     volColIndex = []
     for colNum in range(0,len(arr2d[0])):
