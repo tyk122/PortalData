@@ -241,9 +241,11 @@ def filter_data_by(arr2d, filterType):
 def build_param_dict_from_url(urlAsStr):
 
     # STRIP URL OF BASIC INFORMATION
-    urlInfo = urlAsStr.partition(".php/")
+    urlInfo = urlAsStr.partition(".edu/")
     base, middle, info = str(urlInfo[2]).partition("id/")
     urlList = str('id/' + info).split('/')
+    print info
+
 
     # GENERATE CATEGORIES AND ENTRIES
     categories = urlList[::2]
@@ -317,11 +319,10 @@ def build_url(url_param_dict):
     end_url = ''
 
     for category in URL_ORDER[:-2:]:
-        end_url += str(url_param_dict[category])
-        if category is not "name":
-            end_url += "/"
+        end_url += category + "/" + str(url_param_dict[category]) + "/"
+    end_url += "name" + "/" + str(url_param_dict["name"])
 
-    print end_url
+    return base_url + end_url
 
 # ASSIGNMENT FUNCTIONS
 
