@@ -21,7 +21,7 @@ import openpyxl, pprint
 import dateutil.parser
 
 def get_portal_data():
-    url = 'http://portal.its.pdx.edu/Portal//index.php/api/highways/simplerange/id/1/start/01-16-2016/stop/01-16-2016/starttime/00:00/endtime/23:59/corridor/1/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/format/csv/name/traffic_data.csv'
+    url = 'http://portal.its.pdx.edu/api/highways/simplerange/id/1/start/01-16-2016/stop/01-16-2016/starttime/00:00/endtime/23:59/corridor/1/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/format/csv/name/traffic_data.csv'
     response = urllib2.urlopen(url)
     cr = csv.reader(response)
 
@@ -74,10 +74,27 @@ DEFAULT_OPTIONS = {
     'name':'traffic_data.csv'
 }
 
+DEFAULT_PARAM_DICT = {'lane': 'all',
+                      'group': 'no',
+                      'corridor': '0',
+                      'qty1': 'speed',
+                      'res': '1hr',
+                      'format': 'csv',
+                      'stop': '02-04-2016',
+                      'days': '0-1-2-3-4-5-6',
+                      'start': '02-04-2016',
+                      'qty2': 'volume',
+                      'starttime': '00:00',
+                      'endtime': '23:59',
+                      'id': '3170',
+                      'name': 'traffic_data.csv'}
+
 QTY1_OPTIONS = {
     'speed': 'speed',
     'volume': 'volume'
 }
+
+QTY_OPTIONS = ['speed','volume','totalvolume','occupancy','vmt','vht','traveltime','delay']
 
 DATA_TYPE_RELATIONS = {
     "vol": int,
@@ -153,36 +170,60 @@ def get_all_info(urlAsString, withHeader=True):
     :return:
     '''
 
-    # GET DATA AS 2D LIST
-    response = urllib2.urlopen(urlAsString)
-    reader = csv.reader(response)
-    tmpArr = list(reader)
+    # GET INITIAL DATA AS DICTIONARY
+    param_dict = build_param_dict_from_url(urlAsString)
+    final_arr = []
+    firstRun = True
+    print param_dict
 
-    # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
-    headerArr = tmpArr[0]
-    data_types = []
-    for head in headerArr:
-        for dtype in DATA_TYPES:
-            if dtype in head:
-                data_types.append(dtype)
-                break
+    for i in range(0,len(QTY_OPTIONS),2):
 
-    # APPLY DATA TYPES AND CREATE CORRECT TYPES
-    arr_with_correct_types = []
-    for row in tmpArr[1:]:
-        rowArr = []
-        for i in range(0,len(row)):
-            try:
-                result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
-            except:
-                result = None
-            rowArr.append(result)
-        arr_with_correct_types.append(rowArr)
+        print QTY_OPTIONS[i],QTY_OPTIONS[i+1]
 
-    if withHeader:
-        arr_with_correct_types = [headerArr] + arr_with_correct_types
+        # ITERATE THROUGH QTY_OPTIONS TO CHANGE QTY1/QTY2
+        param_dict['qty1'] = QTY_OPTIONS[i]
+        param_dict['qty2'] = QTY_OPTIONS[i+1]
 
-    return arr_with_correct_types
+        # GET DATA AS 2D LIST
+        response = urllib2.urlopen(urlAsString)
+        reader = csv.reader(response)
+        tmpArr = list(reader)
+
+        # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
+        headerArr = tmpArr[0]
+        data_types = []
+        for head in headerArr:
+            for dtype in DATA_TYPES:
+                if dtype in head:
+                    data_types.append(dtype)
+                    break
+
+        # APPLY DATA TYPES AND CREATE CORRECT TYPES
+        arr_with_correct_types = []
+        for row in tmpArr[1:]:
+            rowArr = []
+            for i in range(0,len(row)):
+                try:
+                    result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+                except:
+                    result = None
+                rowArr.append(result)
+            arr_with_correct_types.append(rowArr)
+
+        if withHeader:
+            arr_with_correct_types = [headerArr] + arr_with_correct_types
+
+        print arr_with_correct_types
+
+        if firstRun:
+            final_arr = arr_with_correct_types
+            firstRun = False
+        else:
+            for row, new_row in zip(final_arr,arr_with_correct_types):
+                row.append(new_row[1])
+                row.append(new_row[2])
+
+    return final_arr
 
 def save_as_csv(dataArr,outputFileName):
     '''
@@ -375,18 +416,21 @@ def get_station_data():
 
 def main():
     # define the variable 'current_time' as a tuple of time.localtime()
-    arr = csv_url_to_2d_array(TEST_URL)
+    #arr = csv_url_to_2d_array(TEST_URL)
     #save_as_excel(arr)
-    print arr
+    #print arr
 
     #get_portal_data2()
 
-    arrCol = get_data_by_param(arr)
-    print arrCol
+    ##arrCol = get_data_by_param(arr)
+    #print arrCol
     #print get_station_data()
-    url_param_dict = build_param_dict_from_url(TEST_URL)
-    print 'url_param_dict',url_param_dict
-    build_url(url_param_dict)
+    #url_param_dict = build_param_dict_from_url(TEST_URL)
+    #print 'url_param_dict', url_param_dict
+    #print build_url(url_param_dict)
+
+    all_arr = get_all_data(TEST_URL)
+    print all_arr
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
