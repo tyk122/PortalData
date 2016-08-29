@@ -34,6 +34,7 @@ import urllib2
 import openpyxl, pprint
 import dateutil.parser
 import pandas as pd
+import os.path
 
 DEFAULT_QUERY_DATA = {
     'api':'highways',       'unknown':'simplerange',    'id':'1',
@@ -80,6 +81,10 @@ URL_ORDER = ['id','start','stop','starttime','endtime','corridor','qty1','qty2',
 TEST_URL = 'http://portal.its.pdx.edu/api/stations/twoquantityungroupedsimplerange/id/3170/start/02-04-2016/stop/02-04-2016/starttime/00:00/endtime/23:59/corridor/0/qty1/speed/qty2/volume/res/1hr/group/no/days/0-1-2-3-4-5-6/lane/all/format/csv/name/traffic_data.csv'
 STATION_DATA_BACKUP_PATH = "station_data_backup.csv"
 
+STATION_ATTRIBUTES = ['stationid','agencyid','highway', 'highwayname', 'milepost','description','upstream','downstream','oppositestation','lon','lat']
+STATION_DEFAULT = {'stationid':1001,'agencyid':103,'highway':1,'highwayname':'I-5','milepost':286.1,'description':'EB Elligsen Loop (2R315) to NB I-5 ','upstream':3165,'downstream':1002,'oppositestation':3113,'lon':-122.76774,'lat':45.33496}
+
+
 class PortalDataSet():
 
     def __init__(self):
@@ -87,29 +92,60 @@ class PortalDataSet():
 
 class Station:
 
-    STATION_ATTRIBUTES = ['stationid','agencyid','highway', 'highwayname', 'milepost','description','upstream','downstream','oppositestation','lon','lat']
-    STATION_DEFAULT = {'stationid':1001,'agencyid':103,'highway':1,'highwayname':'I-5','milepost':286.1,'description':'EB Elligsen Loop (2R315) to NB I-5 ','upstream':3165,'downstream':1002,'oppositestation':3113,'lon':-122.76774,'lat':45.33496}
     STATIONS_ACTIVE = {}
 
     def __init__(self, **kwargs):
 
-        # CHECK THAT ALL NECESSARY STATION INFORMATION IS
-        for attribute in Station.STATION_ATTRIBUTES:
-            kwargs.setdefault(attribute, Station.STATION_DEFAULT[attribute])
+        # CHECK THAT ALL NECESSARY STATION INFORMATION IS IN KWARGS
+        for attribute in STATION_ATTRIBUTES:
+            kwargs.setdefault(attribute, STATION_DEFAULT[attribute])
             #
 
-        #
+        # SET
         for key, value in kwargs.items():
-            if key in Station.STATION_ATTRIBUTES:
+            if key in STATION_ATTRIBUTES:
                 setattr(self, key, value)
 
-        Station.STATIONS_ACTIVE[self] = self.stationid
+        Station.STATIONS_ACTIVE[self.stationid] = self
 
     def __str__(self):
-        return str([getattr(self,attribute) for attribute in Station.STATION_ATTRIBUTES])
+        return str([getattr(self,attribute) for attribute in STATION_ATTRIBUTES])
 
     def get_next_station(self):
         pass
+
+    def get_next_station_id(self):
+        id_arr = get_station_ids()
+        next_id = int(id_arr.index(self.stationid)) + 1
+        if next_id > len(id_arr):
+            next_id = 0
+        return str(id_arr[next_id])
+
+    def get_prev_station_id(self):
+        id_arr = get_station_ids()
+        prev_id = int(id_arr.index(self.stationid)) - 1
+        if prev_id < 0:
+            next_id = len(id_arr) - 1
+        return str(id_arr[next_id])
+
+    def get_next_station(self):
+        next_id = Station.get_next_station_id(self)
+        if next_id in Station.STATIONS_ACTIVE.keys():
+            return Station.STATIONS_ACTIVE[next_id]
+        else:
+            return Station.from_station_id(next_id)
+
+    def get_prev_station(self):
+        prev_id = Station.get_prev_station_id(self)
+        if prev_id in Station.STATIONS_ACTIVE.keys():
+            return Station.STATIONS_ACTIVE[prev_id]
+        else:
+            return Station.from_station_id(prev_id)
+
+    @classmethod
+    def from_station_id(cls, stationid):
+        d = station_dictionary(stationid)
+        return Station(**d)
 
 class StationData:
 
@@ -213,9 +249,9 @@ def get_all_info(urlAsString, withHeader=True):
         # DETERMINE PROPER DATA TYPES FOR EACH COLUMN
         headerArr = tmpArr[0]
         data_types = []
-        for head in headerArr:
-            for dtype in DATA_TYPES:
-                if dtype in head:
+        for head in headerArr:                  # Takes data in headerArr and
+            for dtype in DATA_TYPES:            #
+                if dtype in head:               #
                     data_types.append(dtype)
                     break
 
@@ -223,19 +259,22 @@ def get_all_info(urlAsString, withHeader=True):
         arr_with_correct_types = []
         for row in tmpArr[1:]:
             rowArr = []
+
+            # Turn columns into correct data types, row-by-row
             for i in range(0,len(row)):
                 try:
                     result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
                     #        ^--------(1)------^^-----(2)-----^^--(3)-^
-                    # (1)
-                    # (2)
-                    # (3)
+                    # (1) Dictionary with pairs for the data        | DATA_TYPE_RELATIONS[data_types[i]](row[i])
+                    #     columns and their respective data types   | DATA_TYPE_RELATIONS["vol"](row[i])
+                    # (2) String to serve as key for (1)            | int(row[i])
+                    # (3) Data [i]th element to process             | int('175')
                 except:
                     result = None
                 rowArr.append(result)
             arr_with_correct_types.append(rowArr)
 
-        if withHeader:
+        if withHeader: # add headerArr to the larger data set
             arr_with_correct_types = [headerArr] + arr_with_correct_types
 
         if firstRun:
@@ -249,6 +288,13 @@ def get_all_info(urlAsString, withHeader=True):
     return final_arr
 
 # DATA STORAGE FUNCTIONS
+
+def get_array_from_csv():
+
+    with open(STATION_DATA_BACKUP_PATH) as csvfile:
+        arr = list(csv.reader(csvfile))
+
+    return arr
 
 def save_as_csv(dataArr,outputFileName):
     '''
@@ -396,23 +442,70 @@ def get_station_data_as_dict():
     print stations_by_id
     return stations_by_id
 
+def get_station_ids():
+    tmp_arr = get_station_data_from_file(['stationid'])[1:]
+    return [item for sublist in tmp_arr for item in sublist]
+
+def station_lookup(stationid):
+    data_arr = get_station_data_from_file()
+    station_index = get_station_ids().index(stationid)
+    return data_arr[station_index+1]
+
+def station_dictionary(stationid):
+    data_arr = station_lookup(stationid)
+    station_dict = {}
+    for i,j in zip(STATION_ATTRIBUTES,data_arr):
+        station_dict[i] = j
+    return station_dict
+
 # MAIN FUNCTIONS
 
-def get_station_data_backup(return_arr=True):
-    station_data = get_station_data_as_list()
-    save_as_csv(station_data, STATION_DATA_BACKUP_PATH)
+def create_station_data_backup(return_arr=True, force_station_data_update=False):
+
+    if not os.path.exists(STATION_DATA_BACKUP_PATH) or force_station_data_update:
+        station_data = get_station_data_as_list()
+        save_as_csv(station_data, STATION_DATA_BACKUP_PATH)
+    else:
+        station_data = get_station_data_from_file()
 
     if return_arr:
         return station_data
 
+def get_station_data_from_file(return_cols=['stationid','agencyid','highwayid','highwayname','milepost','description','upstreamstation','downstreamstation','oppositestation','lon','lat']):
+
+    if 'stationid' not in return_cols:
+        return_cols = ['stationid'] + return_cols
+
+    tmpArr = get_array_from_csv()
+
+    if return_cols == ['stationid','agencyid','highwayid','highwayname','milepost','description','upstreamstation','downstreamstation','oppositestation','lon','lat']:
+        return tmpArr
+    else:
+        arr = [[] for i in range(0, len(tmpArr))]
+        #      Use loop to make sure empty array has enough columns so that the zip() works.  [[]] will only allow for
+        #      1 row with the zip function.  zip() must match lengths
+
+        for col_name in return_cols:
+            col_arr = get_col(tmpArr, col_name)
+            arr = [row + i for row, i in zip(arr, col_arr)]
+        return arr
+
+def get_col(arr, col_name, return_as_2d_array=True):
+    j = arr[0].index(col_name)
+    rtn_arr = []
+    for i in range(0,len(arr)):
+        if return_as_2d_array:
+            rtn_arr.append([arr[i][j]])
+        else:
+            rtn_arr.append(arr[i][j])
+    return rtn_arr
 
 # SCRIPT MAIN
 
 def main():
-    get_station_data_backup()
-    print get_station_data_as_dict()
-    view_data_table(get_station_data_backup())
 
+    #create_station_data_backup()
+    print get_station_data_from_file(['stationid','agencyid'])
 
 if __name__ == '__main__':     # if the function is the main function ...
     main() # ...call it
