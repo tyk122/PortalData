@@ -10,6 +10,32 @@ CAN CURRENTLY
     - Obtain csv data from specified url
     - Can save data
 
+CLASSES
+- Station
+    -
+
+FUNCTIONS
+    - csv_url_to_2d_array
+    - get_all_info
+    - get_array_from_csv
+    - save_as_csv
+    - save_as_excel
+    - build_param_dict_from_url
+    - get_data_by_param
+    - get_data_by_lane
+    - vmt
+    - vht
+    - pmt
+    - csv_url_2_list
+    - get_station_data_as_list
+    - get_station_data_as_dict
+    - get_station_ids
+    - station_lookup
+    - station_dictionary
+    - create_station_data_backup
+    - get_station_data_from_file
+    - get_col
+
 DEFINITIONS
 - Primary functions:
 - Secondary functions: Functions which build upon primary functions for more useful or specific data applications
@@ -85,10 +111,32 @@ STATION_ATTRIBUTES = ['stationid','agencyid','highway', 'highwayname', 'milepost
 STATION_DEFAULT = {'stationid':1001,'agencyid':103,'highway':1,'highwayname':'I-5','milepost':286.1,'description':'EB Elligsen Loop (2R315) to NB I-5 ','upstream':3165,'downstream':1002,'oppositestation':3113,'lon':-122.76774,'lat':45.33496}
 
 
-class PortalDataSet():
+class PortalDataSet:
 
-    def __init__(self):
-        self.query_data = {}
+    SETS_ACTIVE = {}
+    SET_COUNT = 0
+
+    def __init__(self, **kwargs):
+        # CHECK THAT ALL NECESSARY STATION INFORMATION IS IN KWARGS
+        for attribute in URL_ORDER:
+            kwargs.setdefault(attribute, DEFAULT_PARAM_DICT[attribute])
+            #
+
+        # SET
+        for key, value in kwargs.items():
+            if key in URL_ORDER:
+                setattr(self, key, value)
+
+        self.station_data = get_all_info(kwargs)
+
+        PortalDataSet.SET_COUNT += 1
+        self.id = PortalDataSet.SET_COUNT
+        PortalDataSet.SETS_ACTIVE[self.id] = self
+
+    @classmethod
+    def from_url(cls, url_as_str):
+        param_dict = build_param_dict_from_url(url_as_str)
+        return PortalDataSet(**param_dict)
 
 class Station:
 
@@ -105,6 +153,8 @@ class Station:
         for key, value in kwargs.items():
             if key in STATION_ATTRIBUTES:
                 setattr(self, key, value)
+
+        self.stationdata = {}
 
         Station.STATIONS_ACTIVE[self.stationid] = self
 
@@ -141,6 +191,8 @@ class Station:
             return Station.STATIONS_ACTIVE[prev_id]
         else:
             return Station.from_station_id(prev_id)
+
+
 
     @classmethod
     def from_station_id(cls, stationid):
@@ -222,14 +274,18 @@ def csv_url_to_2d_array(urlAsString, withHeader=True):
 
     return arr_with_correct_types
 
-def get_all_info(urlAsString, withHeader=True):
+def get_all_info_from_url(urlAsString, withHeader=True):
+    param_dict = build_param_dict_from_url(urlAsString)
+    return get_all_info(param_dict, withHeader)
+
+def get_all_info(paramDict, withHeader=True, acceptPartialDataRows=False):
     '''
     :param url:
     :return:
     '''
 
     # GET INITIAL DATA AS DICTIONARY
-    param_dict = build_param_dict_from_url(urlAsString)
+    param_dict = paramDict
     final_arr = []
     firstRun = True
 
@@ -261,18 +317,30 @@ def get_all_info(urlAsString, withHeader=True):
             rowArr = []
 
             # Turn columns into correct data types, row-by-row
-            for i in range(0,len(row)):
+            if acceptPartialDataRows:
+                for i in range(0,len(row)):
+                    try:
+                        result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+                        #        ^--------(1)------^^-----(2)-----^^--(3)-^
+                        # (1) Dictionary with pairs for the data        | DATA_TYPE_RELATIONS[data_types[i]](row[i])
+                        #     columns and their respective data types   | DATA_TYPE_RELATIONS["vol"](row[i])
+                        # (2) String to serve as key for (1)            | int(row[i])
+                        # (3) Data [i]th element to process             | int('175')
+                    except:
+                        result = None
+                    rowArr.append(result)
+                arr_with_correct_types.append(rowArr)
+            else: # If one cell in a row fails, the entire row is rejected. This will execute faster because try/except
+                  # are only called every row, not every cell
                 try:
-                    result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
-                    #        ^--------(1)------^^-----(2)-----^^--(3)-^
-                    # (1) Dictionary with pairs for the data        | DATA_TYPE_RELATIONS[data_types[i]](row[i])
-                    #     columns and their respective data types   | DATA_TYPE_RELATIONS["vol"](row[i])
-                    # (2) String to serve as key for (1)            | int(row[i])
-                    # (3) Data [i]th element to process             | int('175')
+                    for i in range(0,len(row)):
+                        result = DATA_TYPE_RELATIONS[data_types[i]](row[i])
+                        #        ^------------As above--------------------^
+                        rowArr.append(result)
+                    rowArr.append(result)
                 except:
-                    result = None
-                rowArr.append(result)
-            arr_with_correct_types.append(rowArr)
+                    pass
+        # end loop
 
         if withHeader: # add headerArr to the larger data set
             arr_with_correct_types = [headerArr] + arr_with_correct_types
